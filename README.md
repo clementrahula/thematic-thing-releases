@@ -1,2 +1,2 @@
-# thematic-thing-releases
-Public release downloads for Thematic Thing
+This repository is used only for public binary releases of Thematic Thing.
+The application source code is not published here.
