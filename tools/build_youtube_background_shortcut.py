@@ -9,7 +9,7 @@ NAME = "YouTube Background"
 OUT = "dist/YouTube-Background.shortcut"
 
 JS = r'''(() => {
-  const KEY = '__cgptYoutubeBackgroundV1';
+  const KEY = '__cgptYoutubeBackgroundV2';
   const findVideo = () => document.querySelector('video');
   const initialVideo = findVideo();
   if (!initialVideo) { completion('No video found'); return; }
@@ -47,20 +47,6 @@ JS = r'''(() => {
 
   const originalPause = HTMLMediaElement.prototype.pause;
 
-  const attach = (video) => {
-    if (!video || video.__cgptBgAttached) return;
-    video.__cgptBgAttached = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-
-    video.addEventListener('pause', () => {
-      const hidden = realHidden();
-      const justBackgrounded = Date.now() - state.lastBackgroundSignal < 3500;
-      if (!state.enabled || (!hidden && !justBackgrounded) || video.ended) return;
-      resume(video);
-    }, true);
-  };
-
   const resume = (candidate) => {
     const video = candidate && candidate.isConnected ? candidate : findVideo();
     if (!video || video.ended || !state.enabled) return;
@@ -80,11 +66,30 @@ JS = r'''(() => {
     }
   };
 
-  const backgroundSignal = () => {
+  const attach = (video) => {
+    if (!video || video.__cgptBgAttachedV2) return;
+    video.__cgptBgAttachedV2 = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.addEventListener('pause', (event) => {
+      const hidden = realHidden();
+      const justBackgrounded = Date.now() - state.lastBackgroundSignal < 5000;
+      if (!state.enabled || (!hidden && !justBackgrounded) || video.ended) return;
+      try { event.stopImmediatePropagation(); } catch (_) {}
+      resume(video);
+      setTimeout(() => resume(video), 50);
+      setTimeout(() => resume(video), 250);
+      setTimeout(() => resume(video), 1000);
+    }, true);
+  };
+
+  const backgroundSignal = (event) => {
     state.lastBackgroundSignal = Date.now();
+    try { event && event.stopImmediatePropagation(); } catch (_) {}
     Promise.resolve().then(() => resume(state.video));
-    setTimeout(() => resume(state.video), 60);
-    setTimeout(() => resume(state.video), 300);
+    setTimeout(() => resume(state.video), 50);
+    setTimeout(() => resume(state.video), 250);
+    setTimeout(() => resume(state.video), 1000);
   };
 
   try {
@@ -99,6 +104,13 @@ JS = r'''(() => {
   window.addEventListener('pagehide', backgroundSignal, true);
   window.addEventListener('blur', backgroundSignal, true);
   document.addEventListener('freeze', backgroundSignal, true);
+
+  try {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => resume(state.video));
+      navigator.mediaSession.setActionHandler('pause', () => originalPause.call(state.video));
+    }
+  } catch (_) {}
 
   const observer = new MutationObserver(() => {
     const video = findVideo();
@@ -150,7 +162,7 @@ def sign_with_hubsign(shortcut):
         method="POST",
         headers={
             "Content-Type": "application/json",
-            "User-Agent": "cherri/1.0",
+            "User-Agent": "cherri/2.3.0",
             "Origin": "https://routinehub.co",
             "Referer": "https://routinehub.co/",
         },
