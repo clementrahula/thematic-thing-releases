@@ -15,8 +15,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      - name: Match current Cherri signing request
+        run: |
+          sed -i '/"Origin":/d; /"Referer":/d; s/cherri\/1.0/cherri\/2.3.0/' tools/build_youtube_background_shortcut.py
       - name: Build and sign shortcut
-        run: python3 tools/build_youtube_background_shortcut.py
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            echo "Signing attempt $attempt"
+            if python3 tools/build_youtube_background_shortcut.py; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
       - name: Verify signed shortcut
         run: |
           python3 - <<'PY'
