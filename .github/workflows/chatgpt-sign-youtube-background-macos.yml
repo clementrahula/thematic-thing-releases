@@ -1,0 +1,42 @@
+name: ChatGPT Sign YouTube Background macOS
+
+on:
+  create:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-macos-trigger-')
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Build unsigned shortcut
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          import tools.build_youtube_background_shortcut as b
+          b.OUT = 'dist/YouTube-Background.unsigned.shortcut'
+          b.sign_with_hubsign = lambda shortcut: plistlib.dumps(shortcut, fmt=plistlib.FMT_BINARY)
+          b.main()
+          PY
+      - name: Sign with macOS Shortcuts
+        run: |
+          shortcuts sign -i dist/YouTube-Background.unsigned.shortcut -o dist/YouTube-Background.shortcut -m anyone
+      - name: Verify signature
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('dist/YouTube-Background.shortcut')
+          data = p.read_bytes()
+          print('size', len(data), 'magic', data[:4])
+          assert data[:4] == b'AEA1'
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-Background-macOS-signed
+          path: dist/YouTube-Background.shortcut
+          if-no-files-found: error
