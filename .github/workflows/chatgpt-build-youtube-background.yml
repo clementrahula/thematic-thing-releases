@@ -1,8 +1,7 @@
 name: ChatGPT Build YouTube Background
 
 on:
-  issues:
-    types: [opened]
+  create:
   workflow_dispatch:
 
 permissions:
@@ -10,10 +9,12 @@ permissions:
 
 jobs:
   build:
-    if: startsWith(github.event.issue.title, '[shortcut-build]') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-build-trigger-')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Build and sign shortcut
         run: python3 tools/build_youtube_background_shortcut.py
       - name: Verify signed shortcut
