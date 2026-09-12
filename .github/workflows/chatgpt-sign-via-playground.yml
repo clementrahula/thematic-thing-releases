@@ -1,0 +1,95 @@
+name: ChatGPT Sign YouTube Background via Playground
+
+on:
+  create:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-playground-trigger-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Build and sign through Cherri Playground
+        run: |
+          python3 - <<'PY'
+          import http.cookiejar, json, os, plistlib, re, urllib.parse, urllib.request
+          import tools.build_youtube_background_shortcut as b
+
+          donor = b.fetch_donor()
+          actions = donor.get('WFWorkflowActions', [])
+          js_actions = [a for a in actions if a.get('WFWorkflowActionIdentifier') == 'is.workflow.actions.runjavascriptonwebpage']
+          if not js_actions:
+              raise RuntimeError('No Run JavaScript on Web Page donor action')
+          action = js_actions[0]
+          action.setdefault('WFWorkflowActionParameters', {})['WFJavaScript'] = b.JS
+          donor['WFWorkflowActions'] = [action]
+          donor['WFWorkflowName'] = b.NAME
+          donor['WFWorkflowTypes'] = ['ActionExtension']
+          donor['WFWorkflowInputContentItemClasses'] = ['WFSafariWebPageContentItem']
+          donor['WFWorkflowOutputContentItemClasses'] = []
+          donor['WFWorkflowHasShortcutInputVariables'] = True
+          donor['WFWorkflowHasOutputFallback'] = False
+          donor['WFWorkflowImportQuestions'] = []
+          xml = plistlib.dumps(donor, fmt=plistlib.FMT_XML).decode('utf-8')
+
+          cj = http.cookiejar.CookieJar()
+          opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+          ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15'
+          base = 'https://playground.cherrilang.org/'
+          html = opener.open(urllib.request.Request(base, headers={'User-Agent': ua}), timeout=45).read().decode('utf-8','replace')
+          m = re.search(r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)', html, re.I)
+          if not m:
+              m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\']', html, re.I)
+          token = m.group(1) if m else None
+          print('csrf token found:', bool(token), 'cookies:', [c.name for c in cj])
+          headers = {
+              'User-Agent': ua,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json, text/plain, */*',
+              'X-Requested-With': 'XMLHttpRequest',
+              'Origin': 'https://playground.cherrilang.org',
+              'Referer': base,
+          }
+          if token:
+              headers['X-CSRF-TOKEN'] = token
+          # Laravel also accepts X-XSRF-TOKEN from the XSRF-TOKEN cookie.
+          for c in cj:
+              if c.name == 'XSRF-TOKEN':
+                  headers['X-XSRF-TOKEN'] = urllib.parse.unquote(c.value)
+          body = json.dumps({'name': b.NAME, 'data': xml}).encode('utf-8')
+          req = urllib.request.Request(base + 'sign', data=body, method='POST', headers=headers)
+          try:
+              resp = opener.open(req, timeout=120)
+              raw = resp.read()
+              print('sign status', resp.status, 'content-type', resp.headers.get('content-type'), 'body', raw[:500])
+          except urllib.error.HTTPError as e:
+              print('sign error', e.code, e.read()[:4000])
+              raise
+          text = raw.decode('utf-8','replace').strip()
+          try:
+              url = json.loads(text)
+          except Exception:
+              url = text.strip('"')
+          if isinstance(url, dict):
+              url = url.get('url') or url.get('download') or url.get('file')
+          if not isinstance(url, str) or not url.startswith('http'):
+              raise RuntimeError(f'Unexpected signing response: {text[:500]}')
+          print('download url', url)
+          signed = opener.open(urllib.request.Request(url, headers={'User-Agent':ua, 'Referer':base}), timeout=120).read()
+          if signed[:4] != b'AEA1':
+              raise RuntimeError(f'Not signed AEA1: {signed[:32]!r}')
+          os.makedirs('dist', exist_ok=True)
+          out='dist/YouTube-Background.shortcut'
+          open(out,'wb').write(signed)
+          print('SIGNED OK', out, len(signed), signed[:4])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-Background-playground-signed
+          path: dist/YouTube-Background.shortcut
+          if-no-files-found: error
