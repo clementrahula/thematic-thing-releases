@@ -1,0 +1,37 @@
+name: ChatGPT Inspect Cherri Playground
+
+on:
+  create:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-inspect-trigger-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect playground assets and signing endpoints
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request, urllib.parse
+          base='https://playground.cherrilang.org/'
+          req=urllib.request.Request(base,headers={'User-Agent':'Mozilla/5.0'})
+          html=urllib.request.urlopen(req,timeout=30).read().decode('utf-8','replace')
+          print('HTML_LEN',len(html))
+          print(html[:5000])
+          srcs=re.findall(r'<script[^>]+src=["\']([^"\']+)',html,re.I)
+          print('\nSCRIPTS',srcs)
+          for src in srcs:
+              u=urllib.parse.urljoin(base,src)
+              try:
+                  js=urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=30).read().decode('utf-8','replace')
+              except Exception as e:
+                  print('ERR',u,e); continue
+              print('\n=== ASSET',u,'LEN',len(js),'===')
+              for pat in [r'https?://[^"\'`\\\s]+', r'[^\n]{0,180}hubsign[^\n]{0,180}', r'[^\n]{0,180}sign(?:ing)?[^\n]{0,180}', r'[^\n]{0,180}fetch\([^\n]{0,220}', r'[^\n]{0,180}/api/[^\n]{0,220}']:
+                  vals=re.findall(pat,js,re.I)
+                  if vals:
+                      print('PAT',pat)
+                      for v in vals[:100]: print(v[:700])
+          PY
