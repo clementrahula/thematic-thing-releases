@@ -1,11 +1,10 @@
 name: ChatGPT Build YouTube Background
 
 on:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - tools/build_youtube_background_shortcut.py
-      - .github/workflows/chatgpt-build-youtube-background.yml
   workflow_dispatch:
 
 permissions:
