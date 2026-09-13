@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -37,6 +37,13 @@ jobs:
           assert data[:4] == b'AEA1', data[:16]
           print(p, len(data), data[:4])
           PY
+      - name: Publish signed shortcut to repository
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f dist/YouTube-Background.shortcut
+          git commit -m "Publish signed YouTube Background shortcut" || exit 0
+          git push origin HEAD:main
       - uses: actions/upload-artifact@v4
         with:
           name: YouTube-Background
