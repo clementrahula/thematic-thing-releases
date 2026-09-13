@@ -2,15 +2,13 @@ name: ChatGPT Sign YouTube Background macOS
 
 on:
   create:
-  pull_request:
-    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   build:
-    if: (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-macos-trigger-')) || (github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'shortcut-macos-trigger-'))
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'shortcut-macos-trigger-')
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
